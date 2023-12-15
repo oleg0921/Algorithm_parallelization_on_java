@@ -1,96 +1,70 @@
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Arrays;
 
-public class Main {
-    public static void main (String[] args) {
+class WaveProcessor {
+    private static void calculateSum(int[] arr, int start, int end, int[] result) {
+        while (start < end) {
+            int pairSum = arr[start] + arr[end];
+            result[start] = pairSum;
+            start++;
+            end--;
+        }
+    }
 
-        int[] array = {1, 2, 3, 4, 5, 6};
+    private static void processWave(int[] arr, int[] result, int waveNumber) {
+        int length = arr.length;
+        while (length > 1) {
+            int numThreads = length / 2;
+            Thread[] threads = new Thread[numThreads];
 
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
-
-        ExecutorService executorService = Executors.newFixedThreadPool(availableProcessors);
-
-        int[] currentArray = array;
-
-        while (currentArray.length > 1) {
-            SumSync sumSync = new SumSync(currentArray.length / 2);
-
-            for (int i = 0; i < availableProcessors; i++) {
-                executorService.execute(new SumCalculator(currentArray, i, sumSync));
+            for (int i = 0; i < numThreads; i++) {
+                final int index = i;
+                int[] finalArr = arr;
+                int finalLength = length;
+                threads[i] = new Thread(() -> calculateSum(finalArr, index, finalLength - index - 1, result));
+                threads[i].start();
             }
 
             try {
-                sumSync.awaitCompletion();
+                for (Thread thread : threads) {
+                    thread.join();
+                }
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
 
-            currentArray = sumSync.getResultArray();
+            System.out.println("Хвиля " + waveNumber + ":");
+            System.out.print("пари - ");
+            for (int i = 0; i < numThreads; i++) {
+                System.out.print(arr[i] + " + " + arr[length - i - 1]);
+                if (i < numThreads - 1) {
+                    System.out.print("; ");
+                }
+            }
+            System.out.println(";");
+            System.out.println("Результат - " + Arrays.toString(arr));
+            System.out.println("----------------------------------------");
+
+            if (length % 2 != 0) {
+                result[numThreads] = arr[numThreads]; // залишити середній елемент незмінним
+                numThreads++;
+            }
+
+            arr = Arrays.copyOf(result, numThreads);
+            length = arr.length;
+            waveNumber++;
         }
 
-        executorService.shutdown();
-
-        int result = currentArray[0];
-        System.out.println("Сума елементів масиву: " + result);
-
-    }
-}
-
-
-class SumSync {
-    private final int[] resultArray;
-    private int count;
-
-    public SumSync(int size) {
-        this.resultArray = new int[size];
+        System.out.println("Тривалість хвиль: " + waveNumber);
+        System.out.println("Сума елементів масиву: " + arr[0]);
     }
 
-    public synchronized void addResult(int result) {
-        resultArray[count++] = result;
-    }
+    public static void main(String[] args) {
+        int[] inputArray = {1, 2, 3, 4, 5, 6};
+        int wave = 1;
 
-    public int[] getResultArray() {
-        return resultArray;
-    }
-
-    public synchronized void awaitCompletion() throws InterruptedException {
-        while (count < resultArray.length) {
-            wait();
-        }
-    }
-
-    public synchronized void signalCompletion() {
-        notifyAll();
-    }
-}
-
-class SumCalculator implements Runnable {
-    private final int[] array;
-    private int index;
-    private final SumSync sumSync;
-
-    public SumCalculator(int[] array, int index, SumSync sumSync) {
-        this.array = array;
-        this.index = index;
-        this.sumSync = sumSync;
-    }
-
-    @Override
-    public void run() {
-        int length = array.length;
-        int symmetricIndex = length - index - 1;
-
-        while (index < symmetricIndex) {
-            int sum = array[index] + array[symmetricIndex];
-
-            // Збереження результату
-            sumSync.addResult(sum);
-
-            index += length;
-            symmetricIndex -= length;
-        }
-
-        // Сигнал про завершення роботи потока
-        sumSync.signalCompletion();
+        processWave(inputArray, new int[inputArray.length / 2 + 1], wave);
     }
 }
