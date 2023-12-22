@@ -1,70 +1,88 @@
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.Arrays;
+public class Main {
+    public static void main (String[] args) {
 
-class WaveProcessor {
-    private static void calculateSum(int[] arr, int start, int end, int[] result) {
-        while (start < end) {
-            int pairSum = arr[start] + arr[end];
-            result[start] = pairSum;
-            start++;
-            end--;
-        }
+        int[] array = {1, 2, 3, 4, 5, 6};
+        calculateParallelArraySum(array);
     }
 
-    private static void processWave(int[] arr, int[] result, int waveNumber) {
-        int length = arr.length;
-        while (length > 1) {
-            int numThreads = length / 2;
-            Thread[] threads = new Thread[numThreads];
 
-            for (int i = 0; i < numThreads; i++) {
-                final int index = i;
-                int[] finalArr = arr;
-                int finalLength = length;
-                threads[i] = new Thread(() -> calculateSum(finalArr, index, finalLength - index - 1, result));
-                threads[i].start();
+    public static void calculateParallelArraySum(int[] array) {
+        ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
+        while (array.length > 1) {
+            int newIterationArrayLength = (array.length % 2 == 0) ? array.length / 2 : (array.length / 2) + 1;
+
+
+            int[] results = new int[newIterationArrayLength];
+
+            CountDownLatch latch = new CountDownLatch(newIterationArrayLength);
+            for (int i = 0; i < newIterationArrayLength; i++) {
+
+                int[] finalArray = array;
+                int finalI = i;
+
+                executorService.execute(() -> {
+                   new SymSync(finalArray, newIterationArrayLength, finalI, results, latch).run();
+                    latch.countDown();
+
+                });
             }
 
             try {
-                for (Thread thread : threads) {
-                    thread.join();
-                }
+                latch.await();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
 
-            System.out.println("Хвиля " + waveNumber + ":");
-            System.out.print("пари - ");
-            for (int i = 0; i < numThreads; i++) {
-                System.out.print(arr[i] + " + " + arr[length - i - 1]);
-                if (i < numThreads - 1) {
-                    System.out.print("; ");
-                }
-            }
-            System.out.println(";");
-            System.out.println("Результат - " + Arrays.toString(arr));
-            System.out.println("----------------------------------------");
-
-            if (length % 2 != 0) {
-                result[numThreads] = arr[numThreads]; // залишити середній елемент незмінним
-                numThreads++;
-            }
-
-            arr = Arrays.copyOf(result, numThreads);
-            length = arr.length;
-            waveNumber++;
+            System.out.println("проміжний результат обрахунку : " + Arrays.toString(results));
+            array = results;
         }
 
-        System.out.println("Тривалість хвиль: " + waveNumber);
-        System.out.println("Сума елементів масиву: " + arr[0]);
+        executorService.shutdown();
+        System.out.println("фінальний результат : " + array[0]);
     }
 
-    public static void main(String[] args) {
-        int[] inputArray = {1, 2, 3, 4, 5, 6};
-        int wave = 1;
+}
 
-        processWave(inputArray, new int[inputArray.length / 2 + 1], wave);
+class SymSync implements Runnable{
+
+    private  int[] actualArray;
+
+    private int newIterationArrayLength;
+
+    private int index;
+
+    private  int[] results;
+
+
+    private CountDownLatch latch;
+
+
+
+    SymSync (int[] actualArray, int newIterationArrayLength, int index, int[] results, CountDownLatch latch) {
+        this.actualArray = actualArray;
+        this.newIterationArrayLength = newIterationArrayLength;
+        this.index = index;
+        this.results = results;
+        this.latch = latch;
+
+    }
+
+
+    @Override
+    public void run () {
+
+         System.out.println(Thread.currentThread().getName() + " started work");
+        final int index2 = actualArray.length - 1 - index;
+
+        int value = actualArray[index] + ((index2 >= newIterationArrayLength) ? actualArray[index2] : 0);
+        int finalIndex = index;
+        results[finalIndex] = value;
+        System.out.println(finalIndex  + "- finalIndex  " + Arrays.toString(results));
+
     }
 }
